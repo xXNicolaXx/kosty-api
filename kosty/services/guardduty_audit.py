@@ -8,6 +8,30 @@ class GuardDutyAuditService:
     Checks GuardDuty activation status and retrieves high-severity findings.
     """
     
+    # Constants
+    HIGH_SEVERITY_THRESHOLD = 7.0  # Severity score threshold for high/critical findings
+    CRITICAL_SEVERITY_THRESHOLD = 9.0
+    MEDIUM_SEVERITY_THRESHOLD = 4.0
+    
+    # GuardDuty finding type to action-oriented recommendation mappings
+    FINDING_TYPE_ACTIONS = {
+        'Backdoor:EC2': 'URGENT: EC2 instance may be compromised and acting as command & control server. Isolate instance, investigate network traffic, and terminate if confirmed malicious.',
+        'Behavior:EC2': 'EC2 instance is behaving abnormally. Review CloudTrail logs, check for unauthorized API calls, and verify legitimate usage patterns.',
+        'CryptoCurrency:EC2': 'EC2 instance may be mining cryptocurrency. This wastes compute resources. Stop the instance, investigate processes, and secure your environment.',
+        'Pentest:IAM': 'IAM credentials are being used in penetration testing activities. If unauthorized, rotate credentials immediately and review IAM permissions.',
+        'Persistence:IAM': 'Attacker may be trying to maintain access. Review IAM user/role activity, rotate credentials, and enable MFA.',
+        'Policy:IAM': 'IAM entity has suspicious permissions. Review and restrict permissions following least-privilege principle.',
+        'PrivilegeEscalation:IAM': 'IAM entity attempting privilege escalation. Revoke excessive permissions and investigate activity.',
+        'Recon:IAM': 'IAM credentials used for reconnaissance. This may indicate account compromise. Rotate credentials and review recent API calls.',
+        'ResourceConsumption:IAM': 'Unusual resource usage detected. May indicate account compromise or misconfiguration. Review usage patterns.',
+        'Stealth:IAM': 'CloudTrail logging has been disabled or modified. Re-enable CloudTrail immediately and investigate who made the changes.',
+        'Trojan:EC2': 'EC2 instance may have malware. Isolate instance immediately, take snapshot for forensics, and launch clean replacement.',
+        'UnauthorizedAccess:EC2': 'Unauthorized access to EC2 instance detected. Review security groups, rotate SSH keys, and check for unauthorized users.',
+        'UnauthorizedAccess:IAM': 'Suspicious login activity detected. Enable MFA, rotate credentials, and review recent account activity.',
+        'Exfiltration:S3': 'Data may be exfiltrated from S3. Review bucket policies, enable S3 access logging, and investigate suspicious downloads.',
+        'Impact:EC2': 'EC2 instance involved in denial of service or other impacts. Isolate instance and investigate traffic patterns.',
+    }
+    
     def __init__(self):
         self.cost_checks = []
         self.security_checks = ['check_guardduty_status', 'get_high_severity_findings']
@@ -165,7 +189,7 @@ class GuardDutyAuditService:
                     FindingCriteria={
                         'Criterion': {
                             'severity': {
-                                'Gte': 7  # High (7.0-8.9) and Critical (9.0-10.0)
+                                'Gte': self.HIGH_SEVERITY_THRESHOLD  # High (7.0-8.9) and Critical (9.0-10.0)
                             },
                             'updatedAt': {
                                 'Gte': int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
@@ -197,11 +221,11 @@ class GuardDutyAuditService:
                     action = self._translate_finding_to_action(finding_type, finding)
                     
                     # Determine severity label
-                    if severity >= 9.0:
+                    if severity >= self.CRITICAL_SEVERITY_THRESHOLD:
                         severity_label = 'critical'
-                    elif severity >= 7.0:
+                    elif severity >= self.HIGH_SEVERITY_THRESHOLD:
                         severity_label = 'high'
-                    elif severity >= 4.0:
+                    elif severity >= self.MEDIUM_SEVERITY_THRESHOLD:
                         severity_label = 'medium'
                     else:
                         severity_label = 'low'
@@ -251,24 +275,8 @@ class GuardDutyAuditService:
         """
         Translate GuardDuty finding type into clear, action-oriented recommendation.
         """
-        # Common finding types and their action recommendations
-        actions = {
-            'Backdoor:EC2': 'URGENT: EC2 instance may be compromised and acting as command & control server. Isolate instance, investigate network traffic, and terminate if confirmed malicious.',
-            'Behavior:EC2': 'EC2 instance is behaving abnormally. Review CloudTrail logs, check for unauthorized API calls, and verify legitimate usage patterns.',
-            'CryptoCurrency:EC2': 'EC2 instance may be mining cryptocurrency. This wastes compute resources. Stop the instance, investigate processes, and secure your environment.',
-            'Pentest:IAM': 'IAM credentials are being used in penetration testing activities. If unauthorized, rotate credentials immediately and review IAM permissions.',
-            'Persistence:IAM': 'Attacker may be trying to maintain access. Review IAM user/role activity, rotate credentials, and enable MFA.',
-            'Policy:IAM': 'IAM entity has suspicious permissions. Review and restrict permissions following least-privilege principle.',
-            'PrivilegeEscalation:IAM': 'IAM entity attempting privilege escalation. Revoke excessive permissions and investigate activity.',
-            'Recon:IAM': 'IAM credentials used for reconnaissance. This may indicate account compromise. Rotate credentials and review recent API calls.',
-            'ResourceConsumption:IAM': 'Unusual resource usage detected. May indicate account compromise or misconfiguration. Review usage patterns.',
-            'Stealth:IAM': 'CloudTrail logging has been disabled or modified. Re-enable CloudTrail immediately and investigate who made the changes.',
-            'Trojan:EC2': 'EC2 instance may have malware. Isolate instance immediately, take snapshot for forensics, and launch clean replacement.',
-            'UnauthorizedAccess:EC2': 'Unauthorized access to EC2 instance detected. Review security groups, rotate SSH keys, and check for unauthorized users.',
-            'UnauthorizedAccess:IAM': 'Suspicious login activity detected. Enable MFA, rotate credentials, and review recent account activity.',
-            'Exfiltration:S3': 'Data may be exfiltrated from S3. Review bucket policies, enable S3 access logging, and investigate suspicious downloads.',
-            'Impact:EC2': 'EC2 instance involved in denial of service or other impacts. Isolate instance and investigate traffic patterns.',
-        }
+        # Use finding type actions from class constant
+        actions = self.FINDING_TYPE_ACTIONS
         
         # Try to find matching action based on finding type prefix
         for pattern, action in actions.items():

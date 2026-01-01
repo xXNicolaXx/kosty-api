@@ -9,6 +9,34 @@ class CostExplorerAuditService:
     Supports multi-account cost aggregation and budget monitoring.
     """
     
+    # Constants for cost thresholds
+    MIN_COST_THRESHOLD = 1.0  # Only report services costing > $1
+    MIN_ANOMALY_IMPACT_THRESHOLD = 10.0  # Only report anomalies with > $10 impact
+    TREND_INCREASE_THRESHOLD = 10.0  # Percentage increase to classify as "increasing"
+    TREND_DECREASE_THRESHOLD = -10.0  # Percentage decrease to classify as "decreasing"
+    
+    # Target AWS services to monitor
+    TARGET_SERVICES = [
+        'Amazon Elastic Compute Cloud - Compute',
+        'Amazon Simple Storage Service',
+        'AWS Lambda',
+        'Amazon Relational Database Service',
+        'Amazon CloudFront',
+        'Amazon API Gateway',
+        'Amazon DynamoDB'
+    ]
+    
+    # Mock cost data for testing (monthly costs)
+    MOCK_SERVICE_COSTS = {
+        'Amazon Elastic Compute Cloud - Compute': {'daily': 15.50, 'weekly': 108.50, 'monthly': 465.00},
+        'Amazon Simple Storage Service': {'daily': 3.20, 'weekly': 22.40, 'monthly': 96.00},
+        'AWS Lambda': {'daily': 0.85, 'weekly': 5.95, 'monthly': 25.50},
+        'Amazon Relational Database Service': {'daily': 12.00, 'weekly': 84.00, 'monthly': 360.00},
+        'Amazon CloudFront': {'daily': 2.10, 'weekly': 14.70, 'monthly': 63.00},
+        'Amazon API Gateway': {'daily': 0.45, 'weekly': 3.15, 'monthly': 13.50},
+        'Amazon DynamoDB': {'daily': 1.80, 'weekly': 12.60, 'monthly': 54.00}
+    }
+    
     def __init__(self):
         self.cost_checks = ['analyze_costs_by_service', 'detect_cost_anomalies', 'check_budget_thresholds']
         self.security_checks = []
@@ -67,9 +95,7 @@ class CostExplorerAuditService:
                 granularity = 'MONTHLY'
             
             # Services to monitor specifically
-            target_services = ['Amazon Elastic Compute Cloud - Compute', 'Amazon Simple Storage Service',
-                             'AWS Lambda', 'Amazon Relational Database Service', 
-                             'Amazon CloudFront', 'Amazon API Gateway', 'Amazon DynamoDB']
+            target_services = self.TARGET_SERVICES
             
             # Get cost and usage data
             response = ce.get_cost_and_usage(
@@ -103,13 +129,13 @@ class CostExplorerAuditService:
             
             # Create findings for services with significant costs
             for service, data in service_costs.items():
-                if data['total'] > 1.0:  # Only report services costing > $1
+                if data['total'] > self.MIN_COST_THRESHOLD:  # Only report services costing > $1
                     # Calculate trend
                     if len(data['data_points']) >= 2:
                         recent_cost = sum(dp['cost'] for dp in data['data_points'][-3:]) / min(3, len(data['data_points'][-3:]))
                         older_cost = sum(dp['cost'] for dp in data['data_points'][:3]) / min(3, len(data['data_points'][:3]))
                         trend_pct = ((recent_cost - older_cost) / older_cost * 100) if older_cost > 0 else 0
-                        trend = 'increasing' if trend_pct > 10 else ('decreasing' if trend_pct < -10 else 'stable')
+                        trend = 'increasing' if trend_pct > self.TREND_INCREASE_THRESHOLD else ('decreasing' if trend_pct < self.TREND_DECREASE_THRESHOLD else 'stable')
                     else:
                         trend = 'unknown'
                         trend_pct = 0
@@ -197,7 +223,7 @@ class CostExplorerAuditService:
                 total_impact = impact.get('TotalImpact', 0)
                 
                 # Only report significant anomalies (> $10 impact)
-                if float(total_impact) > 10:
+                if float(total_impact) > self.MIN_ANOMALY_IMPACT_THRESHOLD:
                     results.append({
                         'AccountId': account_id,
                         'Service': 'CostExplorer',
@@ -348,16 +374,8 @@ class CostExplorerAuditService:
         """
         results = []
         
-        # Mock services with realistic cost data
-        mock_services = {
-            'Amazon Elastic Compute Cloud - Compute': {'daily': 15.50, 'weekly': 108.50, 'monthly': 465.00},
-            'Amazon Simple Storage Service': {'daily': 3.20, 'weekly': 22.40, 'monthly': 96.00},
-            'AWS Lambda': {'daily': 0.85, 'weekly': 5.95, 'monthly': 25.50},
-            'Amazon Relational Database Service': {'daily': 12.00, 'weekly': 84.00, 'monthly': 360.00},
-            'Amazon CloudFront': {'daily': 2.10, 'weekly': 14.70, 'monthly': 63.00},
-            'Amazon API Gateway': {'daily': 0.45, 'weekly': 3.15, 'monthly': 13.50},
-            'Amazon DynamoDB': {'daily': 1.80, 'weekly': 12.60, 'monthly': 54.00}
-        }
+        # Use mock services data from class constant
+        mock_services = self.MOCK_SERVICE_COSTS
         
         for service, costs in mock_services.items():
             cost_key = period.lower() if period.lower() in costs else 'monthly'
