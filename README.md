@@ -97,6 +97,26 @@ curl -X POST http://localhost:5000/api/alerts/feed \
 
 📖 **[Quick Start Guide →](QUICKSTART.md)** | **[Complete API Documentation →](API_README.md)** | **[New Features Guide →](API_NEW_FEATURES.md)**
 
+### 🧪 API Test Dashboard
+
+**NEW!** Interactive React dashboard for testing all API endpoints:
+
+```bash
+cd test-dashboard
+npm install
+npm run dev
+```
+
+The test dashboard provides:
+- ✅ Interactive test pages for all 12 API endpoints
+- 📝 Easy-to-use forms for POST requests  
+- 📊 Formatted JSON response display
+- 🎨 Clean card-based UI for readability
+
+Visit http://localhost:5173 after starting the dev server. Perfect for debugging and testing API responses!
+
+📖 **[Test Dashboard Documentation →](test-dashboard/README.md)**
+
 ---
 
 
