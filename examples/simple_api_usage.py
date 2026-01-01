@@ -39,7 +39,7 @@ def main():
     response = requests.get(f"{API_URL}/api/services")
     services = response.json()
     print(f"   Total services: {services['total_services']}")
-    print(f"   Services: {', '.join(list(services['services'].keys())[:5])}...")
+    print(f"   Services: {', '.join(list(services['services'])[:5])}...")
     
     # 3. Check if user has configured their credentials
     if USER_ROLE_ARN == "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole":
@@ -52,8 +52,8 @@ def main():
         print("   4. Update this script with your role ARN and external ID")
         sys.exit(0)
     
-    # 3. Run a simple audit
-    print("\n3. Running audit for us-east-1...")
+    # 4. Run a simple audit
+    print("\n4. Running audit for us-east-1...")
     audit_request = {
         "user_role_arn": USER_ROLE_ARN,
         "external_id": EXTERNAL_ID,
