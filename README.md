@@ -1,4 +1,4 @@
-# 💰 Kosty - AWS Cost Optimization & Security Audit CLI Tool
+# 💰 Kosty - AWS Cost Optimization & Security Audit Tool
 
 <div align="center">
 
@@ -9,11 +9,11 @@
 
 > 💡 Need expert help optimizing your AWS infrastructure? [Professional consulting services available →](https://kosty.cloud?utm_source=github&utm_medium=readme-header)
 
-**🚀 Identify AWS cost waste and security vulnerabilities across 16 core services with a single command**
+**🚀 Identify AWS cost waste and security vulnerabilities across 16 core services**
 
-*Save thousands of dollars monthly and improve security posture by finding unused resources, oversized instances, misconfigurations, and compliance issues*
+*Available as both a CLI tool and REST API - Save thousands of dollars monthly and improve security posture by finding unused resources, oversized instances, misconfigurations, and compliance issues*
 
-[🎯 Quick Start](#-quick-start) • [📖 Documentation](docs/DOCUMENTATION.md) • [🔧 Installation](#-installation) • [💡 Examples](#-examples)
+[🎯 Quick Start](#-quick-start) • [🌐 API Server](#-api-server) • [📖 Documentation](docs/DOCUMENTATION.md) • [🔧 Installation](#-installation) • [💡 Examples](#-examples)
 
 ## 📊 Visual Dashboard
 
@@ -24,6 +24,35 @@
 ✨ **Premium Features**: Interactive charts, responsive design, real-time data visualization, and professional reporting.
 
 </div>
+
+---
+
+## 🌐 API Server
+
+**NEW!** Kosty now includes a REST API server for web-based deployments and integrations:
+
+```bash
+# Start the API server
+./start-api.sh
+
+# Or with custom configuration
+PORT=8080 HOST=0.0.0.0 python3 -m kosty.api
+```
+
+**API Endpoints:**
+- `POST /api/audit` - Run comprehensive AWS audit and get JSON results
+- `GET /api/services` - List all available services and checks
+- `GET /health` - Health check endpoint
+
+**Example API Usage:**
+```bash
+# Run an audit via API
+curl -X POST http://localhost:5000/api/audit \
+  -H "Content-Type: application/json" \
+  -d '{"regions": ["us-east-1", "eu-west-1"]}'
+```
+
+📖 **[Quick Start Guide →](QUICKSTART.md)** | **[Complete API Documentation →](API_README.md)**
 
 ---
 
