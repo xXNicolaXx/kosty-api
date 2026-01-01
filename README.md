@@ -9,11 +9,20 @@
 
 > 💡 Need expert help optimizing your AWS infrastructure? [Professional consulting services available →](https://kosty.cloud?utm_source=github&utm_medium=readme-header)
 
-**🚀 Identify AWS cost waste and security vulnerabilities across 16 core services**
+**🚀 Identify AWS cost waste and security vulnerabilities across 18 services**
 
 *Available as both a CLI tool and REST API - Save thousands of dollars monthly and improve security posture by finding unused resources, oversized instances, misconfigurations, and compliance issues*
 
-[🎯 Quick Start](#-quick-start) • [🌐 API Server](#-api-server) • [📖 Documentation](docs/DOCUMENTATION.md) • [🔧 Installation](#-installation) • [💡 Examples](#-examples)
+**✨ NEW: Advanced Cost Monitoring & Security Features**
+- 💰 Real-time cost analysis by service (EC2, S3, Lambda, RDS, CloudFront, API Gateway, DynamoDB)
+- 📊 Daily/weekly/monthly cost trend analysis
+- 🚨 Cost anomaly detection with AWS Cost Explorer integration
+- 💳 Budget threshold monitoring and alerts
+- 🛡️ GuardDuty security threat detection
+- 🔔 Unified alert feed combining cost + security findings
+- 🧪 Mock data support for testing without active AWS resources
+
+[🎯 Quick Start](#-quick-start) • [🌐 API Server](#-api-server) • [🆕 New Features](API_NEW_FEATURES.md) • [📖 Documentation](docs/DOCUMENTATION.md) • [🔧 Installation](#-installation) • [💡 Examples](#-examples)
 
 ## 📊 Visual Dashboard
 
@@ -39,20 +48,54 @@
 PORT=8080 HOST=0.0.0.0 python3 -m kosty.api
 ```
 
-**API Endpoints:**
+**Core API Endpoints:**
 - `POST /api/audit` - Run comprehensive AWS audit and get JSON results
 - `GET /api/services` - List all available services and checks
 - `GET /health` - Health check endpoint
 
+**🆕 Cost Monitoring & Analytics:**
+- `POST /api/costs` - Get cost analysis by service (daily/weekly/monthly)
+- `POST /api/costs/trends` - Analyze cost trends and spending patterns
+- `POST /api/costs/anomalies` - Detect unusual spending with AWS Cost Anomaly Detection
+- `POST /api/budgets` - Monitor budget thresholds and get alerts
+
+**🆕 Security Monitoring:**
+- `POST /api/guardduty` - Check GuardDuty status and get high-severity findings
+- Automatic translation of security findings to action-oriented recommendations
+
+**🆕 Unified Alert Feed:**
+- `POST /api/alerts/feed` - Get aggregated alerts from all sources (cost + security)
+- `POST /api/alerts/summary` - Get alert summary statistics
+- `POST /api/alerts/configure` - Configure alert thresholds
+
 **Example API Usage:**
 ```bash
-# Run an audit via API
-curl -X POST http://localhost:5000/api/audit \
+# Get monthly cost analysis
+curl -X POST http://localhost:5000/api/costs \
   -H "Content-Type: application/json" \
-  -d '{"regions": ["us-east-1", "eu-west-1"]}'
+  -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "period": "MONTHLY"
+  }'
+
+# Check GuardDuty security findings
+curl -X POST http://localhost:5000/api/guardduty \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "regions": ["us-east-1"]
+  }'
+
+# Get unified alert feed
+curl -X POST http://localhost:5000/api/alerts/feed \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "feed_type": "daily"
+  }'
 ```
 
-📖 **[Quick Start Guide →](QUICKSTART.md)** | **[Complete API Documentation →](API_README.md)**
+📖 **[Quick Start Guide →](QUICKSTART.md)** | **[Complete API Documentation →](API_README.md)** | **[New Features Guide →](API_NEW_FEATURES.md)**
 
 ---
 
@@ -355,7 +398,7 @@ These services provide security and compliance audits without cost quantificatio
 
 ---
 
-## 📊 Complete Service Coverage (16 Services)
+## 📊 Complete Service Coverage (18 Services)
 
 ### 🎯 Service Overview
 
@@ -365,8 +408,8 @@ These services provide security and compliance audits without cost quantificatio
 | **🗄️ Storage** | S3, EBS, Snapshots | Empty buckets, orphaned volumes, old snapshots |
 | **🗃️ Database** | RDS, DynamoDB | Idle databases, over-provisioned tables |
 | **🌐 Network** | EIP, LB, NAT, SG, Route53 | Unused resources, no healthy targets |
-| **🔐 Security** | IAM | Unused roles, old access keys, inactive users |
-| **📊 Management** | CloudWatch, Backup | Unused alarms, expensive logs, empty vaults |
+| **🔐 Security** | IAM, GuardDuty | Unused roles, threat detection, security findings |
+| **📊 Management** | CloudWatch, Backup, Cost Explorer | Cost monitoring, unused alarms, budget alerts |
 | **🌐 Application** | API Gateway | Unused APIs, expensive configurations |
 
 ### 📋 Service Commands Summary
@@ -383,14 +426,15 @@ These services provide security and compliance audits without cost quantificatio
 | **Lambda** | 8 | 3 | 5 checks |
 | **EIP** | 7 | 3 | 4 checks |
 | **CloudWatch** | 7 | 3 | 4 checks |
-| **Backup** | 6 | 3 | 3 checks |
 | **NAT** | 6 | 3 | 3 checks |
 | **Snapshots** | 6 | 3 | 3 checks |
 | **API Gateway** | 5 | 3 | 2 checks |
 | **DynamoDB** | 5 | 3 | 2 checks |
 | **Route53** | 5 | 3 | 2 checks |
+| **Cost Explorer** | 4 | 1 | 3 checks |
+| **GuardDuty** | 3 | 1 | 2 checks |
 
-**📊 Total: 147 commands (1 global + 146 service commands)**
+**📊 Total: 154 commands (1 global + 153 service commands)**
 
 ### 🔍 Top Individual Checks by Service
 
