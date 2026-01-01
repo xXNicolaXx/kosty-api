@@ -2,6 +2,17 @@
 
 This guide will help you get the Kosty API up and running in minutes.
 
+## Authentication Model
+
+The Kosty API uses **AWS cross-account IAM roles** for secure access. This means:
+
+1. **You create an IAM role** in your AWS account
+2. **Configure it to trust** the API's AWS account
+3. **API assumes the role** to get temporary credentials
+4. **No permanent credentials** are stored or transmitted
+
+This is the industry-standard secure pattern for SaaS applications.
+
 ## Step 1: Install Dependencies
 
 ```bash
@@ -10,29 +21,7 @@ pip install -r requirements.txt
 
 This installs Flask, Flask-CORS, boto3, and other required packages.
 
-## Step 2: Configure AWS Credentials
-
-The API needs AWS credentials to scan your infrastructure. Choose one method:
-
-### Option A: Environment Variables (Recommended for production)
-```bash
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-### Option B: AWS Credentials File (For local development)
-```bash
-# File: ~/.aws/credentials
-[default]
-aws_access_key_id = your-access-key
-aws_secret_access_key = your-secret-key
-```
-
-### Option C: IAM Instance Profile (For EC2 deployment)
-When running on EC2, the API can use the instance's IAM role automatically. No configuration needed!
-
-## Step 3: Start the API Server
+## Step 2: Start the API Server
 
 ```bash
 ./start-api.sh
@@ -45,26 +34,126 @@ python3 -m kosty.api
 
 The server will start on `http://0.0.0.0:5000` by default.
 
-## Step 4: Test the API
+## Step 3: Get the API's AWS Account ID
+
+```bash
+curl http://localhost:5000/api/account-id
+```
+
+**Response:**
+```json
+{
+  "account_id": "123456789012",
+  "arn": "arn:aws:sts::123456789012:assumed-role/...",
+  "instructions": "Use this Account ID when creating the trust relationship..."
+}
+```
+
+**Save this Account ID** - you'll need it to configure the IAM role.
+
+## Step 4: Create IAM Role in Your AWS Account
+
+### 4a. Create the Role
+
+Go to AWS Console → IAM → Roles → Create Role
+
+**Trusted Entity Type:** AWS Account
+**Account ID:** Enter the Account ID from Step 3
+**Role Name:** `KostyAuditRole` (or your preferred name)
+
+### 4b. Configure Trust Policy
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:root"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "your-unique-external-id"
+        }
+      }
+    }
+  ]
+}
+```
+
+Replace:
+- `123456789012` with the Account ID from Step 3
+- `your-unique-external-id` with a unique identifier (e.g., your user ID)
+
+### 4c. Attach Permissions Policy
+
+Attach the **ReadOnlyAccess** managed policy, or create a custom policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "s3:List*",
+        "s3:Get*",
+        "rds:Describe*",
+        "lambda:List*",
+        "lambda:Get*",
+        "iam:Get*",
+        "iam:List*",
+        "cloudwatch:*",
+        "elasticloadbalancing:Describe*",
+        "dynamodb:Describe*",
+        "route53:List*",
+        "apigateway:GET",
+        "backup:List*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### 4d. Copy the Role ARN
+
+After creating the role, copy its ARN. It looks like:
+```
+arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole
+```
+
+## Step 5: Run an Audit
 
 ### Using cURL
 ```bash
-# Health check
-curl http://localhost:5000/health
-
-# Run a simple audit
 curl -X POST http://localhost:5000/api/audit \
   -H "Content-Type: application/json" \
-  -d '{"regions": ["us-east-1"]}'
+  -d '{
+    "user_role_arn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole",
+    "external_id": "your-unique-external-id",
+    "regions": ["us-east-1"]
+  }'
 ```
 
 ### Using the Example Script
+
+Edit `examples/simple_api_usage.py` and update:
+```python
+USER_ROLE_ARN = "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole"
+EXTERNAL_ID = "your-unique-external-id"
+```
+
+Then run:
 ```bash
 cd examples
 python3 simple_api_usage.py
 ```
 
-## Step 5: View Results
+## Step 6: View Results
 
 The API returns JSON with:
 - All discovered issues

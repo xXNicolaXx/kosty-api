@@ -4,7 +4,19 @@ This document describes how to use the Kosty API server for AWS cost optimizatio
 
 ## Overview
 
-The Kosty API provides a RESTful web service interface to run AWS audits and retrieve cost optimization recommendations. It exposes the same powerful auditing capabilities as the CLI tool through HTTP endpoints.
+The Kosty API provides a RESTful web service interface to run AWS audits and retrieve cost optimization recommendations. It uses **cross-account IAM roles** to securely access your AWS accounts without storing credentials.
+
+## Authentication Model
+
+The API uses AWS cross-account AssumeRole for secure access:
+
+1. **You create an IAM role** in your AWS account
+2. **Configure trust relationship** with the API's AWS account ID
+3. **Provide the role ARN** when calling the API
+4. **API assumes the role** to get temporary credentials
+5. **Audit runs** with read-only access to your account
+
+This is the recommended pattern for SaaS applications accessing AWS accounts.
 
 ## Quick Start
 
@@ -26,17 +38,98 @@ python3 -m kosty.api
 
 The server will start on `http://0.0.0.0:5000` by default.
 
-### 3. Test the API
+### 3. Get the API's AWS Account ID
 
 ```bash
-# Check health
-curl http://localhost:5000/health
+curl http://localhost:5000/api/account-id
+```
 
-# Get API documentation
-curl http://localhost:5000/
+**Response:**
+```json
+{
+  "account_id": "123456789012",
+  "arn": "arn:aws:sts::123456789012:assumed-role/...",
+  "instructions": "Use this Account ID when creating the trust relationship..."
+}
+```
 
-# List available services
-curl http://localhost:5000/api/services
+Save this Account ID - you'll need it to create the IAM role.
+
+### 4. Create IAM Role in Your AWS Account
+
+Create a role named `KostyAuditRole` (or your preferred name) with:
+
+**Trust Policy:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:root"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "your-unique-external-id"
+        }
+      }
+    }
+  ]
+}
+```
+
+Replace:
+- `123456789012` with the Account ID from step 3
+- `your-unique-external-id` with a unique identifier (e.g., user ID, company ID)
+
+**Permissions Policy:**
+
+Attach the `ReadOnlyAccess` managed policy or create a custom policy with specific read permissions:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "s3:List*",
+        "s3:Get*",
+        "rds:Describe*",
+        "lambda:List*",
+        "lambda:Get*",
+        "iam:Get*",
+        "iam:List*",
+        "cloudwatch:Describe*",
+        "cloudwatch:Get*",
+        "cloudwatch:List*",
+        "elasticloadbalancing:Describe*",
+        "dynamodb:Describe*",
+        "dynamodb:List*",
+        "route53:List*",
+        "route53:Get*",
+        "apigateway:GET",
+        "backup:List*",
+        "backup:Describe*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### 5. Run an Audit
+
+```bash
+curl -X POST http://localhost:5000/api/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_role_arn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole",
+    "external_id": "your-unique-external-id",
+    "regions": ["us-east-1"]
+  }'
 ```
 
 ## API Endpoints
@@ -67,6 +160,19 @@ Health check endpoint to verify the API is running.
 }
 ```
 
+### GET /api/account-id
+
+Get the AWS Account ID of the API server. Users need this to create the trust relationship in their IAM role.
+
+**Response:**
+```json
+{
+  "account_id": "123456789012",
+  "arn": "arn:aws:sts::123456789012:assumed-role/...",
+  "instructions": "Use this Account ID when creating the trust relationship..."
+}
+```
+
 ### GET /api/services
 
 List all available AWS services that can be audited.
@@ -93,21 +199,22 @@ Run a comprehensive AWS audit across specified services and regions.
 **Request Body:**
 ```json
 {
-  "organization": false,
+  "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+  "external_id": "your-unique-external-id",
   "regions": ["us-east-1", "eu-west-1"],
   "max_workers": 5,
-  "cross_account_role": "OrganizationAccountAccessRole",
-  "org_admin_account_id": null,
   "profile": "default",
   "config_file": null
 }
 ```
 
 **Parameters:**
-- `organization` (boolean, optional): Run organization-wide scan. Default: `false`
+- `user_role_arn` (string, **required**): ARN of the IAM role in your AWS account
+- `external_id` (string, **recommended**): Unique identifier for additional security
 - `regions` (array, optional): List of AWS regions to scan. Default: `["us-east-1"]`
 - `max_workers` (integer, optional): Number of parallel workers. Default: `5`
-- `cross_account_role` (string, optional): Cross-account IAM role name. Default: `"OrganizationAccountAccessRole"`
+- `organization` (boolean, optional): Run organization-wide scan. Default: `false`
+- `cross_account_role` (string, optional): Cross-account IAM role name for org mode
 - `org_admin_account_id` (string, optional): Organization admin account ID
 - `profile` (string, optional): Configuration profile to use. Default: `"default"`
 - `config_file` (string, optional): Path to configuration file
@@ -151,7 +258,11 @@ Run a comprehensive AWS audit across specified services and regions.
 ```bash
 curl -X POST http://localhost:5000/api/audit \
   -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "external_id": "user-12345",
+    "regions": ["us-east-1"]
+  }'
 ```
 
 ### Multi-Region Audit
@@ -160,6 +271,8 @@ curl -X POST http://localhost:5000/api/audit \
 curl -X POST http://localhost:5000/api/audit \
   -H "Content-Type: application/json" \
   -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "external_id": "user-12345",
     "regions": ["us-east-1", "us-west-2", "eu-west-1"],
     "max_workers": 10
   }'
@@ -171,6 +284,8 @@ curl -X POST http://localhost:5000/api/audit \
 curl -X POST http://localhost:5000/api/audit \
   -H "Content-Type: application/json" \
   -d '{
+    "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",
+    "external_id": "user-12345",
     "organization": true,
     "regions": ["us-east-1"],
     "max_workers": 20,
@@ -178,7 +293,7 @@ curl -X POST http://localhost:5000/api/audit \
   }'
 ```
 
-### Using a Specific Profile
+### Legacy: Using Configuration Profile (Backward Compatible)
 
 ```bash
 curl -X POST http://localhost:5000/api/audit \

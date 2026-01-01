@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
 """
-Example: Multi-Region Audit
-This script demonstrates how to run audits across multiple AWS regions.
+Example: Multi-Region Audit with Cross-Account Role
+This script demonstrates how to run audits across multiple AWS regions using IAM role assumption.
 """
 
 import requests
 import json
 from datetime import datetime
+import sys
 
 # API endpoint
 API_URL = "http://localhost:5000"
 
-def run_multi_region_audit(regions):
+# User configuration - REPLACE THESE VALUES
+USER_ROLE_ARN = "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole"
+EXTERNAL_ID = "your-unique-external-id"
+
+def run_multi_region_audit(regions, role_arn, external_id):
     """Run audit across multiple regions"""
     print(f"\n🌍 Running audit across {len(regions)} regions...")
     print(f"   Regions: {', '.join(regions)}")
     
     audit_request = {
+        "user_role_arn": role_arn,
+        "external_id": external_id,
         "regions": regions,
         "max_workers": 10  # Increase workers for parallel processing
     }
@@ -34,6 +41,18 @@ def main():
     print("🚀 Kosty API - Multi-Region Audit Example")
     print("=" * 60)
     
+    # Check if user has configured their credentials
+    if USER_ROLE_ARN == "arn:aws:iam::YOUR_ACCOUNT_ID:role/KostyAuditRole":
+        print("\n⚠️  WARNING: You need to configure your IAM role ARN!")
+        print("   Please update USER_ROLE_ARN and EXTERNAL_ID in this script.")
+        print("\n📚 Setup Instructions:")
+        print("   1. Get API Account ID: curl http://localhost:5000/api/account-id")
+        print("   2. Create IAM role 'KostyAuditRole' in your AWS account")
+        print("   3. Configure trust policy with API's account ID")
+        print("   4. Add read-only permissions")
+        print("   5. Update this script with your role ARN and external ID")
+        sys.exit(0)
+    
     # Define regions to scan
     regions = [
         "us-east-1",      # US East (N. Virginia)
@@ -47,7 +66,7 @@ def main():
     print("   This may take 5-10 minutes depending on your infrastructure...")
     
     try:
-        response = run_multi_region_audit(regions)
+        response = run_multi_region_audit(regions, USER_ROLE_ARN, EXTERNAL_ID)
         
         if response.status_code == 200:
             results = response.json()

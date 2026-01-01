@@ -24,26 +24,65 @@ def run_audit_sync(
     cross_account_role: str = 'OrganizationAccountAccessRole',
     org_admin_account_id: Optional[str] = None,
     profile: str = 'default',
-    config_file: Optional[str] = None
+    config_file: Optional[str] = None,
+    user_role_arn: Optional[str] = None,
+    external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run a comprehensive audit and return results as JSON.
     This is a synchronous wrapper around the async scanner.
+    
+    Args:
+        user_role_arn: ARN of the role in the user's AWS account to assume
+        external_id: External ID for additional security when assuming the role
     """
-    try:
-        # Initialize config manager
-        config_manager = ConfigManager(
-            config_file=config_file,
-            profile=profile
-        )
-        session = config_manager.get_aws_session()
-    except Exception as e:
-        # Config manager initialization failed, will use default AWS credentials
-        import sys
-        print(f"Warning: Config manager initialization failed: {e}", file=sys.stderr)
-        print("Using default AWS credentials from environment or credentials file", file=sys.stderr)
-        config_manager = None
-        session = None
+    import boto3
+    
+    session = None
+    config_manager = None
+    
+    # Priority: user_role_arn > config file > default credentials
+    if user_role_arn:
+        # Assume role in user's account
+        try:
+            sts = boto3.client('sts')
+            
+            assume_role_params = {
+                'RoleArn': user_role_arn,
+                'RoleSessionName': 'kosty-api-audit',
+                'DurationSeconds': 3600
+            }
+            
+            # Add external ID if provided for additional security
+            if external_id:
+                assume_role_params['ExternalId'] = external_id
+            
+            response = sts.assume_role(**assume_role_params)
+            
+            session = boto3.Session(
+                aws_access_key_id=response['Credentials']['AccessKeyId'],
+                aws_secret_access_key=response['Credentials']['SecretAccessKey'],
+                aws_session_token=response['Credentials']['SessionToken']
+            )
+        except Exception as e:
+            import sys
+            print(f"Error: Failed to assume role {user_role_arn}: {e}", file=sys.stderr)
+            raise Exception(f"Failed to assume role in user's account: {str(e)}")
+    else:
+        # Try to use config file or default credentials
+        try:
+            config_manager = ConfigManager(
+                config_file=config_file,
+                profile=profile
+            )
+            session = config_manager.get_aws_session()
+        except Exception as e:
+            # Config manager initialization failed, will use default AWS credentials
+            import sys
+            print(f"Warning: Config manager initialization failed: {e}", file=sys.stderr)
+            print("Using default AWS credentials from environment or credentials file", file=sys.stderr)
+            config_manager = None
+            session = None
     
     # Default to us-east-1 if no regions specified
     if regions is None:
@@ -101,6 +140,7 @@ def index():
         'endpoints': {
             '/': 'API documentation (this page)',
             '/health': 'Health check endpoint',
+            '/api/account-id': 'Get API server AWS Account ID (needed for IAM role setup)',
             '/api/audit': 'Run comprehensive AWS audit (POST)',
             '/api/services': 'List available AWS services for auditing (GET)'
         },
@@ -115,6 +155,43 @@ def health():
         'status': 'healthy',
         'service': 'kosty-api'
     })
+
+
+@app.route('/api/account-id', methods=['GET'])
+def get_account_id():
+    """
+    Get the AWS Account ID of the API server.
+    Users need this to create the trust relationship in their IAM role.
+    
+    Response (JSON):
+    {
+        "account_id": "123456789012",
+        "instructions": "Use this Account ID when creating the IAM role in your AWS account"
+    }
+    """
+    try:
+        import boto3
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        
+        return jsonify({
+            'account_id': identity['Account'],
+            'arn': identity['Arn'],
+            'instructions': 'Use this Account ID when creating the trust relationship for the IAM role in your AWS account'
+        })
+    except Exception as e:
+        import os
+        debug_mode = os.environ.get('DEBUG', 'false').lower() == 'true'
+        
+        error_response = {
+            'error': str(e),
+            'type': type(e).__name__
+        }
+        
+        if debug_mode:
+            error_response['traceback'] = traceback.format_exc()
+        
+        return jsonify(error_response), 500
 
 
 @app.route('/api/services', methods=['GET'])
@@ -216,13 +293,15 @@ def run_audit():
     
     Request body (JSON):
     {
-        "organization": false,          // Optional: Run org-wide scan (default: false)
-        "regions": ["us-east-1"],       // Optional: List of regions (default: ["us-east-1"])
-        "max_workers": 5,               // Optional: Parallel workers (default: 5)
-        "cross_account_role": "...",    // Optional: Cross-account role name
-        "org_admin_account_id": "...",  // Optional: Org admin account ID
-        "profile": "default",           // Optional: Config profile (default: "default")
-        "config_file": null             // Optional: Path to config file
+        "user_role_arn": "arn:aws:iam::123456789012:role/KostyAuditRole",  // Required: Role ARN in user's account
+        "external_id": "unique-external-id",      // Recommended: External ID for security
+        "regions": ["us-east-1"],                 // Optional: List of regions (default: ["us-east-1"])
+        "max_workers": 5,                         // Optional: Parallel workers (default: 5)
+        "organization": false,                    // Optional: Run org-wide scan (default: false)
+        "cross_account_role": "...",              // Optional: Cross-account role name
+        "org_admin_account_id": "...",            // Optional: Org admin account ID
+        "profile": "default",                     // Optional: Config profile (default: "default")
+        "config_file": null                       // Optional: Path to config file
     }
     
     Response (JSON):
@@ -241,6 +320,8 @@ def run_audit():
         data = request.get_json() or {}
         
         # Extract parameters with defaults
+        user_role_arn = data.get('user_role_arn')
+        external_id = data.get('external_id')
         organization = data.get('organization', False)
         regions = data.get('regions', ['us-east-1'])
         max_workers = data.get('max_workers', 5)
@@ -263,7 +344,9 @@ def run_audit():
             cross_account_role=cross_account_role,
             org_admin_account_id=org_admin_account_id,
             profile=profile,
-            config_file=config_file
+            config_file=config_file,
+            user_role_arn=user_role_arn,
+            external_id=external_id
         )
         
         return jsonify(result)
