@@ -52,7 +52,7 @@ curl -X POST http://localhost:5000/api/audit \
   -d '{"regions": ["us-east-1", "eu-west-1"]}'
 ```
 
-📖 **[Complete API Documentation →](API_README.md)**
+📖 **[Quick Start Guide →](QUICKSTART.md)** | **[Complete API Documentation →](API_README.md)**
 
 ---
 
