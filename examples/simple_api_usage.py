@@ -75,6 +75,8 @@ if __name__ == "__main__":
         main()
     except requests.exceptions.ConnectionError:
         print("\n❌ Error: Cannot connect to API server.")
-        print("   Make sure the server is running: ./start-api.sh")
+        print("   Make sure the server is running:")
+        print("   From repository root: ./start-api.sh")
+        print("   Or: python3 -m kosty.api")
     except Exception as e:
         print(f"\n❌ Error: {e}")

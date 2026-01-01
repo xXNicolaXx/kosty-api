@@ -328,7 +328,16 @@ Error responses include:
 ```json
 {
   "error": "Error message",
-  "traceback": "Detailed error trace (in debug mode)"
+  "type": "ExceptionType"
+}
+```
+
+**Debug Mode:** When `DEBUG=true` is set, error responses also include detailed tracebacks. For security, this should only be enabled in development environments:
+```json
+{
+  "error": "Error message",
+  "type": "ExceptionType",
+  "traceback": "Detailed error trace (only in debug mode)"
 }
 ```
 

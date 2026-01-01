@@ -38,6 +38,10 @@ def run_audit_sync(
         )
         session = config_manager.get_aws_session()
     except Exception as e:
+        # Config manager initialization failed, will use default AWS credentials
+        import sys
+        print(f"Warning: Config manager initialization failed: {e}", file=sys.stderr)
+        print("Using default AWS credentials from environment or credentials file", file=sys.stderr)
         config_manager = None
         session = None
     
@@ -266,11 +270,19 @@ def run_audit():
         
     except Exception as e:
         # Return error details
-        error_trace = traceback.format_exc()
-        return jsonify({
+        import os
+        debug_mode = os.environ.get('DEBUG', 'false').lower() == 'true'
+        
+        error_response = {
             'error': str(e),
-            'traceback': error_trace
-        }), 500
+            'type': type(e).__name__
+        }
+        
+        # Only include traceback in debug mode to avoid leaking system information
+        if debug_mode:
+            error_response['traceback'] = traceback.format_exc()
+        
+        return jsonify(error_response), 500
 
 
 def main():
@@ -280,17 +292,17 @@ def main():
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
     
     print(f"""
-    ╔═══════════════════════════════════════════════════════╗
-    ║          Kosty API Server Starting                    ║
-    ╠═══════════════════════════════════════════════════════╣
-    ║  🌐 Host: {host:40s}   ║
-    ║  🔌 Port: {str(port):40s}   ║
-    ║  🐛 Debug: {str(debug):39s}   ║
-    ╠═══════════════════════════════════════════════════════╣
-    ║  📚 API Documentation: http://{host}:{port}/        ║
-    ║  🏥 Health Check: http://{host}:{port}/health       ║
-    ║  🔍 Run Audit: POST http://{host}:{port}/api/audit  ║
-    ╚═══════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════╗
+║       Kosty API Server Starting                    ║
+╠════════════════════════════════════════════════════╣
+║  🌐 Host: {host:<38s} ║
+║  🔌 Port: {str(port):<38s} ║
+║  🐛 Debug: {str(debug):<37s} ║
+╠════════════════════════════════════════════════════╣
+║  📚 Docs: http://{host}:{port}/<{' ' * max(0, 22 - len(host) - len(str(port)))} ║
+║  🏥 Health: http://{host}:{port}/health<{' ' * max(0, 16 - len(host) - len(str(port)))} ║
+║  🔍 Audit: POST http://{host}:{port}/api/audit<{' ' * max(0, 10 - len(host) - len(str(port)))} ║
+╚════════════════════════════════════════════════════╝
     """)
     
     app.run(host=host, port=port, debug=debug)
